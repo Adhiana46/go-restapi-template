@@ -44,3 +44,14 @@ type ActivityGroupFetchRequest struct {
 	SortBy string `query="sortBy" validate=""`
 	Filter string `query="filter" validate=""`
 }
+
+type ActivityGroupCreateRequest struct {
+	Name        string `json:"name" validate="required,min=3,max=100"`
+	Description string `json:"description" validate=""`
+}
+
+type ActivityGroupUpdateRequest struct {
+	Uuid        string `uri:"uuid" validate:"required"`
+	Name        string `json:"name" validate="required,min=3,max=100"`
+	Description string `json:"description" validate=""`
+}

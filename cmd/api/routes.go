@@ -19,8 +19,7 @@ func routes() *fiber.App {
 				defer handlePanic(c)
 
 				req := dto.ActivityGroupUuidRequest{}
-
-				if err := c.ParamsParser(&req); err != nil {
+				if err := shouldBind(c, &req); err != nil {
 					panic(err)
 				}
 
@@ -37,8 +36,7 @@ func routes() *fiber.App {
 				defer handlePanic(c)
 
 				req := dto.ActivityGroupFetchRequest{}
-
-				if err := c.QueryParser(&req); err != nil {
+				if err := shouldBind(c, &req); err != nil {
 					panic(err)
 				}
 
@@ -51,9 +49,55 @@ func routes() *fiber.App {
 
 				return c.JSON(responsePkg.JsonSuccess(http.StatusOK, "", resp, pagination))
 			})
-			// api.Post("activity_group", activityGroupHandler.Create())
-			// api.Put("activity_group/:id", activityGroupHandler.Update())
-			// api.Delete("activity_group/:id", activityGroupHandler.Delete())
+			api.Post("activity_group", func(c *fiber.Ctx) error {
+				defer handlePanic(c)
+
+				req := dto.ActivityGroupCreateRequest{}
+				if err := shouldBind(c, &req); err != nil {
+					panic(err)
+				}
+
+				activityGroup, err := svcActivityGroup.Create(req)
+				if err != nil {
+					return handleError(c, err)
+				}
+
+				resp := dto.ActivityGroupToResponse(activityGroup)
+
+				return c.JSON(responsePkg.JsonSuccess(http.StatusOK, "", resp, nil))
+			})
+			api.Put("activity_group/:uuid", func(c *fiber.Ctx) error {
+				defer handlePanic(c)
+
+				req := dto.ActivityGroupUpdateRequest{}
+				if err := shouldBind(c, &req); err != nil {
+					panic(err)
+				}
+
+				activityGroup, err := svcActivityGroup.Update(req)
+				if err != nil {
+					return handleError(c, err)
+				}
+
+				resp := dto.ActivityGroupToResponse(activityGroup)
+
+				return c.JSON(responsePkg.JsonSuccess(http.StatusOK, "", resp, nil))
+			})
+			api.Delete("activity_group/:uuid", func(c *fiber.Ctx) error {
+				defer handlePanic(c)
+
+				req := dto.ActivityGroupUuidRequest{}
+				if err := shouldBind(c, &req); err != nil {
+					panic(err)
+				}
+
+				err := svcActivityGroup.Delete(req)
+				if err != nil {
+					return handleError(c, err)
+				}
+
+				return c.JSON(responsePkg.JsonSuccess(http.StatusNoContent, "", nil, nil))
+			})
 		}
 	}
 

@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"log"
 	"net/http"
+	"runtime/debug"
 	"strings"
 
 	responsePkg "github.com/Adhiana46/go-restapi-template/pkg/response"
@@ -50,10 +51,26 @@ func parseValidationErrors(validationErrs validator.ValidationErrors, trans *ut.
 func handlePanic(c *fiber.Ctx) {
 	if r := recover(); r != nil {
 		// TODO: log
-		log.Println("Recovered in f", r)
+		log.Println("Recovered in f", r, string(debug.Stack()))
 
 		response := responsePkg.JsonError(http.StatusInternalServerError, "", nil)
 
 		c.JSON(response)
 	}
+}
+
+func shouldBind(c *fiber.Ctx, req interface{}) error {
+	if err := c.ParamsParser(req); err != nil {
+		return err
+	}
+	if err := c.QueryParser(req); err != nil {
+		return err
+	}
+	if len(c.Body()) > 0 {
+		if err := c.BodyParser(req); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }

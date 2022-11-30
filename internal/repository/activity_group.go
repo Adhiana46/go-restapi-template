@@ -9,13 +9,15 @@ import (
 )
 
 type ActivityGroupRepository interface {
+	BeginTx() *sqlx.Tx
+
 	FindByUuid(uuid string) (*entity.ActivityGroup, error)
+	FindByUuidTx(tx *sqlx.Tx, uuid string) (*entity.ActivityGroup, error)
 	FetchAll(page int, limit int, sorts map[string]string, filter string) ([]*entity.ActivityGroup, error)
 	CountAll(filter string) (int, error)
-	// Store(e *entity.ActivityGroup) (*entity.ActivityGroup, error)
-	// Update(id int, e *entity.ActivityGroup) (*entity.ActivityGroup, error)
-	// DeleteById(id int) (bool, error)
-	// Delete(e *entity.ActivityGroup) (bool, error)
+	Store(tx *sqlx.Tx, e *entity.ActivityGroup) (*entity.ActivityGroup, error)
+	Update(tx *sqlx.Tx, e *entity.ActivityGroup) (*entity.ActivityGroup, error)
+	Delete(tx *sqlx.Tx, e *entity.ActivityGroup) error
 }
 
 type activityGroupRepositoryPostgres struct {
@@ -28,9 +30,23 @@ func NewPostgresActivityGroupRepository(db *sqlx.DB) ActivityGroupRepository {
 	}
 }
 
+func (r *activityGroupRepositoryPostgres) BeginTx() *sqlx.Tx {
+	return r.db.MustBegin()
+}
+
 func (r *activityGroupRepositoryPostgres) FindByUuid(uuid string) (*entity.ActivityGroup, error) {
 	row := entity.ActivityGroup{}
 	err := r.db.Get(&row, "SELECT * FROM activity_group WHERE uuid = $1", uuid)
+	if err != nil {
+		return nil, err
+	}
+
+	return &row, nil
+}
+
+func (r *activityGroupRepositoryPostgres) FindByUuidTx(tx *sqlx.Tx, uuid string) (*entity.ActivityGroup, error) {
+	row := entity.ActivityGroup{}
+	err := tx.Get(&row, "SELECT * FROM activity_group WHERE uuid = $1", uuid)
 	if err != nil {
 		return nil, err
 	}
@@ -103,4 +119,31 @@ func (r *activityGroupRepositoryPostgres) CountAll(filter string) (int, error) {
 	}
 
 	return total, nil
+}
+
+func (r *activityGroupRepositoryPostgres) Store(tx *sqlx.Tx, e *entity.ActivityGroup) (*entity.ActivityGroup, error) {
+	_, err := tx.NamedExec("INSERT INTO activity_group (uuid, name, description, created_at, updated_at) VALUES (:uuid, :name, :description, :created_at, :updated_at)", &e)
+	if err != nil {
+		return nil, err
+	}
+
+	return r.FindByUuidTx(tx, e.Uuid)
+}
+
+func (r *activityGroupRepositoryPostgres) Update(tx *sqlx.Tx, e *entity.ActivityGroup) (*entity.ActivityGroup, error) {
+	_, err := tx.NamedExec("UPDATE activity_group SET name = :name, description = :description, updated_at = :updated_at WHERE id = :id", e)
+	if err != nil {
+		return nil, err
+	}
+
+	return e, nil
+}
+
+func (r *activityGroupRepositoryPostgres) Delete(tx *sqlx.Tx, e *entity.ActivityGroup) error {
+	_, err := tx.NamedExec("DELETE FROM activity_group WHERE id = :id", e)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
