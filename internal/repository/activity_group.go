@@ -1,10 +1,10 @@
 package repository
 
 import (
-	"strconv"
-	"strings"
+	"fmt"
 
 	"github.com/Adhiana46/go-restapi-template/internal/entity"
+	sq "github.com/Masterminds/squirrel"
 	"github.com/jmoiron/sqlx"
 )
 
@@ -24,6 +24,14 @@ type activityGroupRepositoryPostgres struct {
 	db *sqlx.DB
 }
 
+func (a *activityGroupRepositoryPostgres) TableName() string {
+	return "activity_group"
+}
+
+func (a *activityGroupRepositoryPostgres) PrimaryField() string {
+	return "id"
+}
+
 func NewPostgresActivityGroupRepository(db *sqlx.DB) ActivityGroupRepository {
 	return &activityGroupRepositoryPostgres{
 		db: db,
@@ -35,8 +43,18 @@ func (r *activityGroupRepositoryPostgres) BeginTx() *sqlx.Tx {
 }
 
 func (r *activityGroupRepositoryPostgres) FindByUuid(uuid string) (*entity.ActivityGroup, error) {
+	psql := sq.StatementBuilder.PlaceholderFormat(sq.Dollar)
+	sql, args, err := psql.Select("*").
+		From(r.TableName()).
+		Where(sq.Eq{"uuid": uuid}).
+		ToSql()
+
+	if err != nil {
+		return nil, err
+	}
+
 	row := entity.ActivityGroup{}
-	err := r.db.Get(&row, "SELECT * FROM activity_group WHERE uuid = $1", uuid)
+	err = r.db.Get(&row, sql, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -45,8 +63,18 @@ func (r *activityGroupRepositoryPostgres) FindByUuid(uuid string) (*entity.Activ
 }
 
 func (r *activityGroupRepositoryPostgres) FindByUuidTx(tx *sqlx.Tx, uuid string) (*entity.ActivityGroup, error) {
+	psql := sq.StatementBuilder.PlaceholderFormat(sq.Dollar)
+	sql, args, err := psql.Select("*").
+		From(r.TableName()).
+		Where(sq.Eq{"uuid": uuid}).
+		ToSql()
+
+	if err != nil {
+		return nil, err
+	}
+
 	row := entity.ActivityGroup{}
-	err := tx.Get(&row, "SELECT * FROM activity_group WHERE uuid = $1", uuid)
+	err = tx.Get(&row, sql, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -58,38 +86,32 @@ func (r *activityGroupRepositoryPostgres) FetchAll(page int, limit int, sorts ma
 	offset := (page - 1) * limit
 
 	// Build SQL
-	sqlWhere := ""
-	sqlOrders := ""
-	sqlLimit := "LIMIT " + strconv.Itoa(limit) + " OFFSET " + strconv.Itoa(offset)
+	psql := sq.StatementBuilder.PlaceholderFormat(sq.Dollar)
+	queryBuilder := psql.Select("*").
+		From(r.TableName()).
+		Limit(uint64(limit)).
+		Offset(uint64(offset))
 
 	if filter != "" {
-		sqlWhere = "WHERE LOWER(name) LIKE :filter"
+		queryBuilder = queryBuilder.Where("LOWER(name) LIKE ?", fmt.Sprint("%", filter, "%"))
 	}
 
 	if len(sorts) > 0 {
-		aOrders := []string{}
 		for sortField, sortDir := range sorts {
-			aOrders = append(aOrders, sortField+" "+sortDir)
+			queryBuilder = queryBuilder.OrderBy(sortField + " " + sortDir)
 		}
-
-		sqlOrders = "ORDER BY " + strings.Join(aOrders, ",")
 	}
 
-	sql := "SELECT * FROM activity_group " + sqlWhere + " " + sqlOrders + " " + sqlLimit
+	sql, args, err := queryBuilder.ToSql()
 
-	rows := []*entity.ActivityGroup{}
-	result, err := r.db.NamedQuery(sql, map[string]interface{}{"filter": "%" + filter + "%"})
 	if err != nil {
 		return nil, err
 	}
-	for result.Next() {
-		row := entity.ActivityGroup{}
-		err = result.StructScan(&row)
-		if err != nil {
-			return nil, err
-		}
 
-		rows = append(rows, &row)
+	rows := []*entity.ActivityGroup{}
+	err = r.db.Select(&rows, sql, args...)
+	if err != nil {
+		return nil, err
 	}
 
 	return rows, nil
@@ -98,16 +120,21 @@ func (r *activityGroupRepositoryPostgres) FetchAll(page int, limit int, sorts ma
 func (r *activityGroupRepositoryPostgres) CountAll(filter string) (int, error) {
 	total := 0
 
-	sqlWhere := ""
+	// Build SQL
+	psql := sq.StatementBuilder.PlaceholderFormat(sq.Dollar)
+	queryBuilder := psql.Select("COUNT(id) AS total").
+		From(r.TableName())
 
 	if filter != "" {
-		sqlWhere = "WHERE LOWER(name) LIKE :filter"
+		queryBuilder = queryBuilder.Where("LOWER(name) LIKE ?", fmt.Sprint("%", filter, "%"))
 	}
 
-	sql := "SELECT COUNT(id) AS total FROM activity_group " + sqlWhere
+	sql, args, err := queryBuilder.ToSql()
+	if err != nil {
+		return 0, err
+	}
 
-	var err error = nil
-	rows, err := r.db.NamedQuery(sql, map[string]interface{}{"filter": "%" + filter + "%"})
+	rows, err := r.db.Queryx(sql, args...)
 	if err != nil {
 		return 0, err
 	}
@@ -122,7 +149,25 @@ func (r *activityGroupRepositoryPostgres) CountAll(filter string) (int, error) {
 }
 
 func (r *activityGroupRepositoryPostgres) Store(tx *sqlx.Tx, e *entity.ActivityGroup) (*entity.ActivityGroup, error) {
-	_, err := tx.NamedExec("INSERT INTO activity_group (uuid, name, description, created_at, updated_at) VALUES (:uuid, :name, :description, :created_at, :updated_at)", &e)
+	values := map[string]interface{}{
+		"uuid":        e.Uuid,
+		"name":        e.Name,
+		"description": e.Description,
+		"created_at":  e.CreatedAt,
+		"updated_at":  e.UpdatedAt,
+	}
+
+	// Build SQL
+	psql := sq.StatementBuilder.PlaceholderFormat(sq.Dollar)
+	sql, args, err := psql.Insert(r.TableName()).
+		SetMap(values).
+		ToSql()
+
+	if err != nil {
+		return nil, err
+	}
+
+	_, err = tx.Exec(sql, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -131,7 +176,24 @@ func (r *activityGroupRepositoryPostgres) Store(tx *sqlx.Tx, e *entity.ActivityG
 }
 
 func (r *activityGroupRepositoryPostgres) Update(tx *sqlx.Tx, e *entity.ActivityGroup) (*entity.ActivityGroup, error) {
-	_, err := tx.NamedExec("UPDATE activity_group SET name = :name, description = :description, updated_at = :updated_at WHERE id = :id", e)
+	values := map[string]interface{}{
+		"name":        e.Name,
+		"description": e.Description,
+		"updated_at":  e.UpdatedAt,
+	}
+
+	// Build SQL
+	psql := sq.StatementBuilder.PlaceholderFormat(sq.Dollar)
+	sql, args, err := psql.Update(r.TableName()).
+		SetMap(values).
+		Where(sq.Eq{"id": e.ID}).
+		ToSql()
+
+	if err != nil {
+		return nil, err
+	}
+
+	_, err = tx.Exec(sql, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -140,7 +202,17 @@ func (r *activityGroupRepositoryPostgres) Update(tx *sqlx.Tx, e *entity.Activity
 }
 
 func (r *activityGroupRepositoryPostgres) Delete(tx *sqlx.Tx, e *entity.ActivityGroup) error {
-	_, err := tx.NamedExec("DELETE FROM activity_group WHERE id = :id", e)
+	// Build SQL
+	psql := sq.StatementBuilder.PlaceholderFormat(sq.Dollar)
+	sql, args, err := psql.Delete(r.TableName()).
+		Where(sq.Eq{"id": e.ID}).
+		ToSql()
+
+	if err != nil {
+		return err
+	}
+
+	_, err = tx.Exec(sql, args...)
 	if err != nil {
 		return err
 	}
