@@ -18,6 +18,8 @@ import (
 )
 
 var (
+	db *sqlx.DB
+
 	// utils
 	validate      *validator.Validate
 	validateTrans ut.Translator
@@ -45,6 +47,7 @@ var cfg Config
 
 func main() {
 	boot()
+	defer db.Close()
 
 	r := routes()
 
@@ -73,7 +76,7 @@ func boot() {
 	validate = validator.New()
 	id_translations.RegisterDefaultTranslations(validate, validateTrans)
 
-	db, err := openDB()
+	db, err = openDB()
 	if err != nil {
 		log.Panicf("Can't open database connection: %s", err)
 	}
@@ -95,18 +98,18 @@ func openDB() (*sqlx.DB, error) {
 		cfg.DbPass,
 	)
 
-	db, err := sqlx.Connect("pgx", dsn)
+	dbConn, err := sqlx.Connect("pgx", dsn)
 	if err != nil {
 		return nil, err
 	}
 
-	db.SetMaxOpenConns(60)
-	db.SetConnMaxLifetime(120 * time.Second)
-	db.SetMaxIdleConns(30)
-	db.SetConnMaxIdleTime(20 * time.Second)
-	if err = db.Ping(); err != nil {
+	dbConn.SetMaxOpenConns(60)
+	dbConn.SetConnMaxLifetime(120 * time.Second)
+	dbConn.SetMaxIdleConns(30)
+	dbConn.SetConnMaxIdleTime(20 * time.Second)
+	if err = dbConn.Ping(); err != nil {
 		return nil, err
 	}
 
-	return db, nil
+	return dbConn, nil
 }
