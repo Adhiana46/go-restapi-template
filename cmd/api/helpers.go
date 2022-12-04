@@ -7,45 +7,38 @@ import (
 	"runtime/debug"
 	"strings"
 
+	parserPkg "github.com/Adhiana46/go-restapi-template/pkg/parser"
 	responsePkg "github.com/Adhiana46/go-restapi-template/pkg/response"
-	ut "github.com/go-playground/universal-translator"
 	"github.com/go-playground/validator/v10"
 	"github.com/gofiber/fiber/v2"
 )
 
 func handleError(c *fiber.Ctx, err error) error {
-	var resp responsePkg.JsonResponse
+	var statusCode int = 500
+	var message string = ""
+	var errorsData any = nil
 
 	if err == sql.ErrNoRows {
-		resp = responsePkg.JsonError(404, "", nil)
+		statusCode = 404
 	} else if strings.Contains(strings.ToLower(err.Error()), "query parameter") {
-		resp = responsePkg.JsonError(400, "", nil)
+		statusCode = 400
+		message = err.Error()
 	} else {
 		switch err.(type) {
 		case validator.ValidationErrors:
 			errs := err.(validator.ValidationErrors)
-			validationErrors := parseValidationErrors(errs, &validateTrans)
-			resp = responsePkg.JsonError(400, "", validationErrors)
+
+			statusCode = 400
+			errorsData = parserPkg.ValidationErrors(errs, &validateTrans)
 		default:
-			log.Println("handleError: ", err)
-			resp = responsePkg.JsonError(500, "", nil)
+			statusCode = 500
 		}
 	}
 
-	return c.JSON(resp)
-}
+	// TODO: log errors
+	log.Println("handleError: ", err)
 
-func parseValidationErrors(validationErrs validator.ValidationErrors, trans *ut.Translator) map[string][]string {
-	errorFields := map[string][]string{}
-	for _, e := range validationErrs {
-		if trans != nil {
-			errorFields[e.Field()] = append(errorFields[e.Field()], e.Translate(*trans))
-		} else {
-			errorFields[e.Field()] = append(errorFields[e.Field()], e.Tag())
-		}
-	}
-
-	return errorFields
+	return c.Status(statusCode).JSON(responsePkg.JsonError(statusCode, message, errorsData))
 }
 
 func handlePanic(c *fiber.Ctx) {
@@ -55,22 +48,6 @@ func handlePanic(c *fiber.Ctx) {
 
 		response := responsePkg.JsonError(http.StatusInternalServerError, "", nil)
 
-		c.JSON(response)
+		c.Status(http.StatusInternalServerError).JSON(response)
 	}
-}
-
-func shouldBind(c *fiber.Ctx, req interface{}) error {
-	if err := c.ParamsParser(req); err != nil {
-		return err
-	}
-	if err := c.QueryParser(req); err != nil {
-		return err
-	}
-	if len(c.Body()) > 0 {
-		if err := c.BodyParser(req); err != nil {
-			return err
-		}
-	}
-
-	return nil
 }

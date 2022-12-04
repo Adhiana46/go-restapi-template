@@ -3,6 +3,10 @@ package parser
 import (
 	"errors"
 	"strings"
+
+	ut "github.com/go-playground/universal-translator"
+	"github.com/go-playground/validator/v10"
+	"github.com/gofiber/fiber/v2"
 )
 
 // parse sortBy=name.asc,updated_at.desc -> map[string]string
@@ -31,4 +35,33 @@ func QuerySortToMap(sortBy string) (map[string]string, error) {
 	}
 
 	return result, nil
+}
+
+func FiberShouldBindRequest(c *fiber.Ctx, req interface{}) error {
+	if err := c.ParamsParser(req); err != nil {
+		return err
+	}
+	if err := c.QueryParser(req); err != nil {
+		return err
+	}
+	if len(c.Body()) > 0 {
+		if err := c.BodyParser(req); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func ValidationErrors(validationErrs validator.ValidationErrors, trans *ut.Translator) map[string][]string {
+	errorFields := map[string][]string{}
+	for _, e := range validationErrs {
+		if trans != nil {
+			errorFields[e.Field()] = append(errorFields[e.Field()], e.Translate(*trans))
+		} else {
+			errorFields[e.Field()] = append(errorFields[e.Field()], e.Tag())
+		}
+	}
+
+	return errorFields
 }
