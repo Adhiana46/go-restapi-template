@@ -39,19 +39,19 @@ type ActivityGroupUuidRequest struct {
 }
 
 type ActivityGroupFetchRequest struct {
-	Page   int    `query="page" validate="numeric,min=1"`
-	Limit  int    `query="limit" validate="numeric,min=1,max=200"`
-	SortBy string `query="sortBy" validate=""`
-	Filter string `query="filter" validate=""`
+	Page   int    `query="page" validate:"numeric,min=1"`
+	Limit  int    `query="limit" validate:"numeric,min=1,max=200"`
+	SortBy string `query="sortBy" validate:""`
+	Filter string `query="filter" validate:""`
 }
 
 type ActivityGroupCreateRequest struct {
-	Name        string `json:"name" validate="required,min=3,max=100"`
-	Description string `json:"description" validate=""`
+	Name        string `json:"name" validate:"required,min=3,max=100"`
+	Description string `json:"description" validate:""`
 }
 
 type ActivityGroupUpdateRequest struct {
 	Uuid        string `uri:"uuid" validate:"required"`
-	Name        string `json:"name" validate="required,min=3,max=100"`
-	Description string `json:"description" validate=""`
+	Name        string `json:"name" validate:"required,min=3,max=100"`
+	Description string `json:"description" validate:""`
 }
