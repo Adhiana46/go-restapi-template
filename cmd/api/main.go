@@ -26,9 +26,11 @@ var (
 
 	// Repository
 	repoActivityGroup repository.ActivityGroupRepository
+	repoTodoItem      repository.TodoItemRepository
 
 	// Services
 	svcActivityGroup service.ActivityGroupService
+	svcTodoItem      service.TodoItemService
 )
 
 type Config struct {
@@ -83,9 +85,11 @@ func boot() {
 
 	// repositories
 	repoActivityGroup = repository.NewPostgresActivityGroupRepository(db)
+	repoTodoItem = repository.NewPostgresTodoItemRepository(db)
 
 	// services
 	svcActivityGroup = service.NewActivityGroupService(validate, repoActivityGroup)
+	svcTodoItem = service.NewTodoItemService(validate, repoTodoItem, repoActivityGroup)
 }
 
 func openDB() (*sqlx.DB, error) {

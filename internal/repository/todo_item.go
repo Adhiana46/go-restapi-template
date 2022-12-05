@@ -8,62 +8,41 @@ import (
 	"github.com/jmoiron/sqlx"
 )
 
-type ActivityGroupRepository interface {
+type TodoItemRepository interface {
 	BeginTx() *sqlx.Tx
 
-	FindById(id int) (*entity.ActivityGroup, error)
-	FindByUuid(uuid string) (*entity.ActivityGroup, error)
-	FindByUuidTx(tx *sqlx.Tx, uuid string) (*entity.ActivityGroup, error)
-	FetchAll(page int, limit int, sorts map[string]string, filter string) ([]*entity.ActivityGroup, error)
-	CountAll(filter string) (int, error)
-	Store(tx *sqlx.Tx, e *entity.ActivityGroup) (*entity.ActivityGroup, error)
-	Update(tx *sqlx.Tx, e *entity.ActivityGroup) (*entity.ActivityGroup, error)
-	Delete(tx *sqlx.Tx, e *entity.ActivityGroup) error
+	FindByUuid(uuid string) (*entity.TodoItem, error)
+	FindByUuidTx(tx *sqlx.Tx, uuid string) (*entity.TodoItem, error)
+	FetchAll(page int, limit int, sorts map[string]string, activityId int, filter string) ([]*entity.TodoItem, error)
+	CountAll(activityId int, filter string) (int, error)
+	Store(tx *sqlx.Tx, e *entity.TodoItem) (*entity.TodoItem, error)
+	Update(tx *sqlx.Tx, e *entity.TodoItem) (*entity.TodoItem, error)
+	Delete(tx *sqlx.Tx, e *entity.TodoItem) error
 }
 
-type activityGroupRepositoryPostgres struct {
+type todoItemRepositoryPostgres struct {
 	db *sqlx.DB
 }
 
-func (r *activityGroupRepositoryPostgres) TableName() string {
-	return "activity_group"
+func (a *todoItemRepositoryPostgres) TableName() string {
+	return "todo_item"
 }
 
-func (r *activityGroupRepositoryPostgres) PrimaryField() string {
+func (a *todoItemRepositoryPostgres) PrimaryField() string {
 	return "id"
 }
 
-func NewPostgresActivityGroupRepository(db *sqlx.DB) ActivityGroupRepository {
-	return &activityGroupRepositoryPostgres{
+func NewPostgresTodoItemRepository(db *sqlx.DB) TodoItemRepository {
+	return &todoItemRepositoryPostgres{
 		db: db,
 	}
 }
 
-func (r *activityGroupRepositoryPostgres) BeginTx() *sqlx.Tx {
+func (r *todoItemRepositoryPostgres) BeginTx() *sqlx.Tx {
 	return r.db.MustBegin()
 }
 
-func (r *activityGroupRepositoryPostgres) FindById(id int) (*entity.ActivityGroup, error) {
-	psql := sq.StatementBuilder.PlaceholderFormat(sq.Dollar)
-	sql, args, err := psql.Select("*").
-		From(r.TableName()).
-		Where(sq.Eq{"id": id}).
-		ToSql()
-
-	if err != nil {
-		return nil, err
-	}
-
-	row := entity.ActivityGroup{}
-	err = r.db.Get(&row, sql, args...)
-	if err != nil {
-		return nil, err
-	}
-
-	return &row, nil
-}
-
-func (r *activityGroupRepositoryPostgres) FindByUuid(uuid string) (*entity.ActivityGroup, error) {
+func (r *todoItemRepositoryPostgres) FindByUuid(uuid string) (*entity.TodoItem, error) {
 	psql := sq.StatementBuilder.PlaceholderFormat(sq.Dollar)
 	sql, args, err := psql.Select("*").
 		From(r.TableName()).
@@ -74,16 +53,20 @@ func (r *activityGroupRepositoryPostgres) FindByUuid(uuid string) (*entity.Activ
 		return nil, err
 	}
 
-	row := entity.ActivityGroup{}
+	row := entity.TodoItem{}
 	err = r.db.Get(&row, sql, args...)
 	if err != nil {
 		return nil, err
 	}
 
+	if row.Activity != nil && row.Activity.ID == 0 {
+		row.Activity = nil
+	}
+
 	return &row, nil
 }
 
-func (r *activityGroupRepositoryPostgres) FindByUuidTx(tx *sqlx.Tx, uuid string) (*entity.ActivityGroup, error) {
+func (r *todoItemRepositoryPostgres) FindByUuidTx(tx *sqlx.Tx, uuid string) (*entity.TodoItem, error) {
 	psql := sq.StatementBuilder.PlaceholderFormat(sq.Dollar)
 	sql, args, err := psql.Select("*").
 		From(r.TableName()).
@@ -94,16 +77,20 @@ func (r *activityGroupRepositoryPostgres) FindByUuidTx(tx *sqlx.Tx, uuid string)
 		return nil, err
 	}
 
-	row := entity.ActivityGroup{}
+	row := entity.TodoItem{}
 	err = tx.Get(&row, sql, args...)
 	if err != nil {
 		return nil, err
 	}
 
+	if row.Activity != nil && row.Activity.ID == 0 {
+		row.Activity = nil
+	}
+
 	return &row, nil
 }
 
-func (r *activityGroupRepositoryPostgres) FetchAll(page int, limit int, sorts map[string]string, filter string) ([]*entity.ActivityGroup, error) {
+func (r *todoItemRepositoryPostgres) FetchAll(page int, limit int, sorts map[string]string, activityId int, filter string) ([]*entity.TodoItem, error) {
 	offset := (page - 1) * limit
 
 	// Build SQL
@@ -112,6 +99,10 @@ func (r *activityGroupRepositoryPostgres) FetchAll(page int, limit int, sorts ma
 		From(r.TableName()).
 		Limit(uint64(limit)).
 		Offset(uint64(offset))
+
+	if activityId != 0 {
+		queryBuilder = queryBuilder.Where("activity_id = ?", activityId)
+	}
 
 	if filter != "" {
 		queryBuilder = queryBuilder.Where("LOWER(name) LIKE ?", fmt.Sprint("%", filter, "%"))
@@ -129,22 +120,32 @@ func (r *activityGroupRepositoryPostgres) FetchAll(page int, limit int, sorts ma
 		return nil, err
 	}
 
-	rows := []*entity.ActivityGroup{}
+	rows := []*entity.TodoItem{}
 	err = r.db.Select(&rows, sql, args...)
 	if err != nil {
 		return nil, err
 	}
 
+	for _, row := range rows {
+		if row.Activity != nil && row.Activity.ID == 0 {
+			row.Activity = nil
+		}
+	}
+
 	return rows, nil
 }
 
-func (r *activityGroupRepositoryPostgres) CountAll(filter string) (int, error) {
+func (r *todoItemRepositoryPostgres) CountAll(activityId int, filter string) (int, error) {
 	total := 0
 
 	// Build SQL
 	psql := sq.StatementBuilder.PlaceholderFormat(sq.Dollar)
 	queryBuilder := psql.Select("COUNT(id) AS total").
 		From(r.TableName())
+
+	if activityId != 0 {
+		queryBuilder = queryBuilder.Where("activity_id = ?", activityId)
+	}
 
 	if filter != "" {
 		queryBuilder = queryBuilder.Where("LOWER(name) LIKE ?", fmt.Sprint("%", filter, "%"))
@@ -169,9 +170,10 @@ func (r *activityGroupRepositoryPostgres) CountAll(filter string) (int, error) {
 	return total, nil
 }
 
-func (r *activityGroupRepositoryPostgres) Store(tx *sqlx.Tx, e *entity.ActivityGroup) (*entity.ActivityGroup, error) {
+func (r *todoItemRepositoryPostgres) Store(tx *sqlx.Tx, e *entity.TodoItem) (*entity.TodoItem, error) {
 	values := map[string]interface{}{
 		"uuid":        e.Uuid,
+		"activity_id": e.ActivityID,
 		"name":        e.Name,
 		"description": e.Description,
 		"created_at":  e.CreatedAt,
@@ -196,8 +198,9 @@ func (r *activityGroupRepositoryPostgres) Store(tx *sqlx.Tx, e *entity.ActivityG
 	return r.FindByUuidTx(tx, e.Uuid)
 }
 
-func (r *activityGroupRepositoryPostgres) Update(tx *sqlx.Tx, e *entity.ActivityGroup) (*entity.ActivityGroup, error) {
+func (r *todoItemRepositoryPostgres) Update(tx *sqlx.Tx, e *entity.TodoItem) (*entity.TodoItem, error) {
 	values := map[string]interface{}{
+		"activity_id": e.ActivityID,
 		"name":        e.Name,
 		"description": e.Description,
 		"updated_at":  e.UpdatedAt,
@@ -219,10 +222,14 @@ func (r *activityGroupRepositoryPostgres) Update(tx *sqlx.Tx, e *entity.Activity
 		return nil, err
 	}
 
+	if e.Activity != nil && e.Activity.ID == 0 {
+		e.Activity = nil
+	}
+
 	return e, nil
 }
 
-func (r *activityGroupRepositoryPostgres) Delete(tx *sqlx.Tx, e *entity.ActivityGroup) error {
+func (r *todoItemRepositoryPostgres) Delete(tx *sqlx.Tx, e *entity.TodoItem) error {
 	// Build SQL
 	psql := sq.StatementBuilder.PlaceholderFormat(sq.Dollar)
 	sql, args, err := psql.Delete(r.TableName()).

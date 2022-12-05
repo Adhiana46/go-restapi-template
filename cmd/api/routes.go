@@ -26,7 +26,10 @@ func routes() *fiber.App {
 	// Register Handlers
 	handlers.
 		NewActivityGroupHandler(svcActivityGroup).
-		RegisterRoutes(api.Group("/activity_group"))
+		RegisterRoutes(api.Group("/activity-group"))
+	handlers.
+		NewTodoItemHandler(svcTodoItem).
+		RegisterRoutes(api.Group("/activity-group/:activity_uuid/todo-items"))
 
 	return r
 }
