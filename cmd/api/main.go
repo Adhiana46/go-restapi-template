@@ -43,6 +43,14 @@ type Config struct {
 	DbPass string `env:"DB_PASS" env-default:"secret"`
 	DbName string `env:"DB_NAME" env-default:"todoapp"`
 	DbSSL  string `env:"DB_SSL" env-default:"disable"`
+
+	GoogleSSO GoogleSSO
+}
+
+type GoogleSSO struct {
+	ClientID     string `env:"SSO_GOOGLE_CLIENT_ID" env-default:""`
+	ClientSecret string `env:"SSO_GOOGLE_CLIENT_SECRET" env-default:""`
+	RedirectURL  string `env:"SSO_GOOGLE_REDIRECT_URL" env-default:""`
 }
 
 var cfg Config
