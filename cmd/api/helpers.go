@@ -7,6 +7,7 @@ import (
 	"runtime/debug"
 	"strings"
 
+	"github.com/Adhiana46/go-restapi-template/pkg/monitoring"
 	parserPkg "github.com/Adhiana46/go-restapi-template/pkg/parser"
 	responsePkg "github.com/Adhiana46/go-restapi-template/pkg/response"
 	"github.com/go-playground/validator/v10"
@@ -32,6 +33,16 @@ func handleError(c *fiber.Ctx, err error) error {
 			errorsData = parserPkg.ValidationErrors(errs, &validateTrans)
 		default:
 			statusCode = 500
+
+			// log monitoring sentry.io
+			logMonitoring.LogPanic(err.Error(), monitoring.LogData{
+				Method:        string(c.Request().Header.Method()),
+				Endpoint:      string(c.Request().URI().Path()),
+				RequestBody:   string(c.Body()),
+				RequestParams: c.AllParams(),
+				RequestQuery:  string(c.Context().QueryArgs().QueryString()),
+				StackTrace:    string(debug.Stack()),
+			})
 		}
 	}
 
@@ -45,6 +56,16 @@ func handlePanic(c *fiber.Ctx) {
 	if r := recover(); r != nil {
 		// TODO: log
 		log.Println("Recovered in f", r, string(debug.Stack()))
+
+		// log monitoring sentry.io
+		logMonitoring.LogPanic(r.(string), monitoring.LogData{
+			Method:        string(c.Request().Header.Method()),
+			Endpoint:      string(c.Request().URI().Path()),
+			RequestBody:   string(c.Body()),
+			RequestParams: c.AllParams(),
+			RequestQuery:  string(c.Context().QueryArgs().QueryString()),
+			StackTrace:    string(debug.Stack()),
+		})
 
 		response := responsePkg.JsonError(http.StatusInternalServerError, "", nil)
 

@@ -1,24 +1,26 @@
 package repository
 
 import (
+	"context"
 	"fmt"
 
 	"github.com/Adhiana46/go-restapi-template/internal/entity"
 	sq "github.com/Masterminds/squirrel"
+	"github.com/getsentry/sentry-go"
 	"github.com/jmoiron/sqlx"
 )
 
 type ActivityGroupRepository interface {
 	BeginTx() *sqlx.Tx
 
-	FindById(id int) (*entity.ActivityGroup, error)
-	FindByUuid(uuid string) (*entity.ActivityGroup, error)
-	FindByUuidTx(tx *sqlx.Tx, uuid string) (*entity.ActivityGroup, error)
-	FetchAll(page int, limit int, sorts map[string]string, filter string) ([]*entity.ActivityGroup, error)
-	CountAll(filter string) (int, error)
-	Store(tx *sqlx.Tx, e *entity.ActivityGroup) (*entity.ActivityGroup, error)
-	Update(tx *sqlx.Tx, e *entity.ActivityGroup) (*entity.ActivityGroup, error)
-	Delete(tx *sqlx.Tx, e *entity.ActivityGroup) error
+	FindById(ctx context.Context, id int) (*entity.ActivityGroup, error)
+	FindByUuid(ctx context.Context, uuid string) (*entity.ActivityGroup, error)
+	FindByUuidTx(ctx context.Context, tx *sqlx.Tx, uuid string) (*entity.ActivityGroup, error)
+	FetchAll(ctx context.Context, page int, limit int, sorts map[string]string, filter string) ([]*entity.ActivityGroup, error)
+	CountAll(ctx context.Context, filter string) (int, error)
+	Store(ctx context.Context, tx *sqlx.Tx, e *entity.ActivityGroup) (*entity.ActivityGroup, error)
+	Update(ctx context.Context, tx *sqlx.Tx, e *entity.ActivityGroup) (*entity.ActivityGroup, error)
+	Delete(ctx context.Context, tx *sqlx.Tx, e *entity.ActivityGroup) error
 }
 
 type activityGroupRepositoryPostgres struct {
@@ -43,7 +45,10 @@ func (r *activityGroupRepositoryPostgres) BeginTx() *sqlx.Tx {
 	return r.db.MustBegin()
 }
 
-func (r *activityGroupRepositoryPostgres) FindById(id int) (*entity.ActivityGroup, error) {
+func (r *activityGroupRepositoryPostgres) FindById(ctx context.Context, id int) (*entity.ActivityGroup, error) {
+	span := sentry.StartSpan(ctx, "activityGroupRepositoryPostgres.FindById")
+	defer span.Finish()
+
 	psql := sq.StatementBuilder.PlaceholderFormat(sq.Dollar)
 	sql, args, err := psql.Select("*").
 		From(r.TableName()).
@@ -63,7 +68,10 @@ func (r *activityGroupRepositoryPostgres) FindById(id int) (*entity.ActivityGrou
 	return &row, nil
 }
 
-func (r *activityGroupRepositoryPostgres) FindByUuid(uuid string) (*entity.ActivityGroup, error) {
+func (r *activityGroupRepositoryPostgres) FindByUuid(ctx context.Context, uuid string) (*entity.ActivityGroup, error) {
+	span := sentry.StartSpan(ctx, "activityGroupRepositoryPostgres.FindByUuid")
+	defer span.Finish()
+
 	psql := sq.StatementBuilder.PlaceholderFormat(sq.Dollar)
 	sql, args, err := psql.Select("*").
 		From(r.TableName()).
@@ -83,7 +91,10 @@ func (r *activityGroupRepositoryPostgres) FindByUuid(uuid string) (*entity.Activ
 	return &row, nil
 }
 
-func (r *activityGroupRepositoryPostgres) FindByUuidTx(tx *sqlx.Tx, uuid string) (*entity.ActivityGroup, error) {
+func (r *activityGroupRepositoryPostgres) FindByUuidTx(ctx context.Context, tx *sqlx.Tx, uuid string) (*entity.ActivityGroup, error) {
+	span := sentry.StartSpan(ctx, "activityGroupRepositoryPostgres.FindByUuidTx")
+	defer span.Finish()
+
 	psql := sq.StatementBuilder.PlaceholderFormat(sq.Dollar)
 	sql, args, err := psql.Select("*").
 		From(r.TableName()).
@@ -103,7 +114,10 @@ func (r *activityGroupRepositoryPostgres) FindByUuidTx(tx *sqlx.Tx, uuid string)
 	return &row, nil
 }
 
-func (r *activityGroupRepositoryPostgres) FetchAll(page int, limit int, sorts map[string]string, filter string) ([]*entity.ActivityGroup, error) {
+func (r *activityGroupRepositoryPostgres) FetchAll(ctx context.Context, page int, limit int, sorts map[string]string, filter string) ([]*entity.ActivityGroup, error) {
+	span := sentry.StartSpan(ctx, "activityGroupRepositoryPostgres.FetchAll")
+	defer span.Finish()
+
 	offset := (page - 1) * limit
 
 	// Build SQL
@@ -138,7 +152,10 @@ func (r *activityGroupRepositoryPostgres) FetchAll(page int, limit int, sorts ma
 	return rows, nil
 }
 
-func (r *activityGroupRepositoryPostgres) CountAll(filter string) (int, error) {
+func (r *activityGroupRepositoryPostgres) CountAll(ctx context.Context, filter string) (int, error) {
+	span := sentry.StartSpan(ctx, "activityGroupRepositoryPostgres.CountAll")
+	defer span.Finish()
+
 	total := 0
 
 	// Build SQL
@@ -169,7 +186,10 @@ func (r *activityGroupRepositoryPostgres) CountAll(filter string) (int, error) {
 	return total, nil
 }
 
-func (r *activityGroupRepositoryPostgres) Store(tx *sqlx.Tx, e *entity.ActivityGroup) (*entity.ActivityGroup, error) {
+func (r *activityGroupRepositoryPostgres) Store(ctx context.Context, tx *sqlx.Tx, e *entity.ActivityGroup) (*entity.ActivityGroup, error) {
+	span := sentry.StartSpan(ctx, "activityGroupRepositoryPostgres.Store")
+	defer span.Finish()
+
 	values := map[string]interface{}{
 		"uuid":        e.Uuid,
 		"name":        e.Name,
@@ -193,10 +213,13 @@ func (r *activityGroupRepositoryPostgres) Store(tx *sqlx.Tx, e *entity.ActivityG
 		return nil, err
 	}
 
-	return r.FindByUuidTx(tx, e.Uuid)
+	return r.FindByUuidTx(ctx, tx, e.Uuid)
 }
 
-func (r *activityGroupRepositoryPostgres) Update(tx *sqlx.Tx, e *entity.ActivityGroup) (*entity.ActivityGroup, error) {
+func (r *activityGroupRepositoryPostgres) Update(ctx context.Context, tx *sqlx.Tx, e *entity.ActivityGroup) (*entity.ActivityGroup, error) {
+	span := sentry.StartSpan(ctx, "activityGroupRepositoryPostgres.Update")
+	defer span.Finish()
+
 	values := map[string]interface{}{
 		"name":        e.Name,
 		"description": e.Description,
@@ -222,7 +245,10 @@ func (r *activityGroupRepositoryPostgres) Update(tx *sqlx.Tx, e *entity.Activity
 	return e, nil
 }
 
-func (r *activityGroupRepositoryPostgres) Delete(tx *sqlx.Tx, e *entity.ActivityGroup) error {
+func (r *activityGroupRepositoryPostgres) Delete(ctx context.Context, tx *sqlx.Tx, e *entity.ActivityGroup) error {
+	span := sentry.StartSpan(ctx, "activityGroupRepositoryPostgres.Delete")
+	defer span.Finish()
+
 	// Build SQL
 	psql := sq.StatementBuilder.PlaceholderFormat(sq.Dollar)
 	sql, args, err := psql.Delete(r.TableName()).

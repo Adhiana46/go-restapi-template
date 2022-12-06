@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"math"
 	"time"
 
@@ -46,7 +47,7 @@ func (s *todoItemService) FindByUuid(req dto.TodoItemUuidRequest) (*entity.TodoI
 		return nil, err
 	}
 
-	activity, err := s.repoActivity.FindById(todoItem.ActivityID)
+	activity, err := s.repoActivity.FindById(context.Background(), todoItem.ActivityID)
 	if err != nil {
 		return nil, err
 	}
@@ -76,7 +77,7 @@ func (s *todoItemService) FetchAll(req dto.TodoItemFetchRequest) ([]*entity.Todo
 
 	activity := &entity.ActivityGroup{}
 	if req.ActivityUuid != "" {
-		activity, err = s.repoActivity.FindByUuid(req.ActivityUuid)
+		activity, err = s.repoActivity.FindByUuid(context.Background(), req.ActivityUuid)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -118,7 +119,7 @@ func (s *todoItemService) Create(req dto.TodoItemCreateRequest) (*entity.TodoIte
 
 	activity := &entity.ActivityGroup{}
 	if req.ActivityUuid != "" {
-		activity, err = s.repoActivity.FindByUuid(req.ActivityUuid)
+		activity, err = s.repoActivity.FindByUuid(context.Background(), req.ActivityUuid)
 		if err != nil {
 			return nil, err
 		}
@@ -163,7 +164,7 @@ func (s *todoItemService) Update(req dto.TodoItemUpdateRequest) (*entity.TodoIte
 
 	activity := &entity.ActivityGroup{}
 	if req.ActivityUuid != "" {
-		activity, err = s.repoActivity.FindByUuid(req.ActivityUuid)
+		activity, err = s.repoActivity.FindByUuid(context.Background(), req.ActivityUuid)
 		if err != nil {
 			return nil, err
 		}

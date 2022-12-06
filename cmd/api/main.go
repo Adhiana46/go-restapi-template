@@ -8,6 +8,7 @@ import (
 
 	"github.com/Adhiana46/go-restapi-template/internal/repository"
 	"github.com/Adhiana46/go-restapi-template/internal/service"
+	"github.com/Adhiana46/go-restapi-template/pkg/monitoring"
 	"github.com/go-playground/locales/id"
 	ut "github.com/go-playground/universal-translator"
 	"github.com/go-playground/validator/v10"
@@ -23,6 +24,7 @@ var (
 	// utils
 	validate      *validator.Validate
 	validateTrans ut.Translator
+	logMonitoring monitoring.SentryMonitor
 
 	// Repository
 	repoActivityGroup repository.ActivityGroupRepository
@@ -43,6 +45,8 @@ type Config struct {
 	DbPass string `env:"DB_PASS" env-default:"secret"`
 	DbName string `env:"DB_NAME" env-default:"todoapp"`
 	DbSSL  string `env:"DB_SSL" env-default:"disable"`
+
+	SentryDSN string `env:"SENTRY_DSN" env-default:""`
 }
 
 var cfg Config
@@ -82,6 +86,9 @@ func boot() {
 	if err != nil {
 		log.Panicf("Can't open database connection: %s", err)
 	}
+
+	// Monitoring
+	logMonitoring = monitoring.NewSentryMonitor(cfg.SentryDSN)
 
 	// repositories
 	repoActivityGroup = repository.NewPostgresActivityGroupRepository(db)
