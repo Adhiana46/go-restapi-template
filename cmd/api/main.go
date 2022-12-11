@@ -52,7 +52,7 @@ func main() {
 	boot()
 	defer db.Close()
 
-	r := routes()
+	r := httpRoutes()
 
 	if err := r.Listen(fmt.Sprintf("%s:%s", cfg.Host, cfg.Port)); err != nil {
 		log.Panicf("Can't start the server, error: %s", err)
@@ -124,6 +124,8 @@ func openDB() (*sqlx.DB, error) {
 	dbConn.SetConnMaxIdleTime(20 * time.Second)
 	if err = dbConn.Ping(); err != nil {
 		return nil, err
+	} else {
+		log.Infoln("Pinged database successfully!")
 	}
 
 	return dbConn, nil

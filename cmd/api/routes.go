@@ -3,12 +3,12 @@ package main
 import (
 	"time"
 
-	"github.com/Adhiana46/go-restapi-template/handlers"
+	httpTransport "github.com/Adhiana46/go-restapi-template/transport/http"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/logger"
 )
 
-func routes() *fiber.App {
+func httpRoutes() *fiber.App {
 	r := fiber.New(fiber.Config{
 		ErrorHandler: handleError,
 	})
@@ -32,10 +32,10 @@ func routes() *fiber.App {
 	api := r.Group("/api/v1")
 
 	// Register Handlers
-	handlers.
+	httpTransport.
 		NewActivityGroupHandler(svcActivityGroup).
 		RegisterRoutes(api.Group("/activity-group"))
-	handlers.
+	httpTransport.
 		NewTodoItemHandler(svcTodoItem).
 		RegisterRoutes(api.Group("/activity-group/:activity_uuid/todo-items"))
 

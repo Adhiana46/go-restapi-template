@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"math"
 	"time"
 
@@ -34,12 +35,15 @@ func NewActivityGroupService(validate *validator.Validate, repo repository.Activ
 }
 
 func (s *activityGroupService) FindByUuid(req dto.ActivityGroupUuidRequest) (*entity.ActivityGroup, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
 	// Validate
 	if err := s.validate.Struct(req); err != nil {
 		return nil, err
 	}
 
-	activityGroup, err := s.repo.FindByUuid(req.Uuid)
+	activityGroup, err := s.repo.FindByUuid(ctx, req.Uuid)
 	if err != nil {
 		return nil, err
 	}
@@ -48,6 +52,9 @@ func (s *activityGroupService) FindByUuid(req dto.ActivityGroupUuidRequest) (*en
 }
 
 func (s *activityGroupService) FetchAll(req dto.ActivityGroupFetchRequest) ([]*entity.ActivityGroup, *responsePkg.Pagination, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
 	// Set Default Value
 	if req.Page == 0 {
 		req.Page = 1
@@ -64,7 +71,7 @@ func (s *activityGroupService) FetchAll(req dto.ActivityGroupFetchRequest) ([]*e
 		return nil, nil, err
 	}
 
-	totalRows, err := s.repo.CountAll(req.Filter)
+	totalRows, err := s.repo.CountAll(ctx, req.Filter)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -74,7 +81,7 @@ func (s *activityGroupService) FetchAll(req dto.ActivityGroupFetchRequest) ([]*e
 		return nil, nil, err
 	}
 
-	activityGroupList, err := s.repo.FetchAll(req.Page, req.Limit, sorts, req.Filter)
+	activityGroupList, err := s.repo.FetchAll(ctx, req.Page, req.Limit, sorts, req.Filter)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -91,6 +98,9 @@ func (s *activityGroupService) FetchAll(req dto.ActivityGroupFetchRequest) ([]*e
 }
 
 func (s *activityGroupService) Create(req dto.ActivityGroupCreateRequest) (*entity.ActivityGroup, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
 	// Validate
 	if err := s.validate.Struct(req); err != nil {
 		return nil, err
@@ -105,8 +115,8 @@ func (s *activityGroupService) Create(req dto.ActivityGroupCreateRequest) (*enti
 	}
 
 	// begin transaction
-	tx := s.repo.BeginTx()
-	insertedRow, err := s.repo.Store(tx, ent)
+	tx := s.repo.BeginTx(ctx)
+	insertedRow, err := s.repo.Store(ctx, tx, ent)
 
 	// if error rollback, commit otherwise
 	if err != nil {
@@ -120,12 +130,15 @@ func (s *activityGroupService) Create(req dto.ActivityGroupCreateRequest) (*enti
 }
 
 func (s *activityGroupService) Update(req dto.ActivityGroupUpdateRequest) (*entity.ActivityGroup, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
 	// Validate
 	if err := s.validate.Struct(req); err != nil {
 		return nil, err
 	}
 
-	ent, err := s.repo.FindByUuid(req.Uuid)
+	ent, err := s.repo.FindByUuid(ctx, req.Uuid)
 	if err != nil {
 		return ent, err
 	}
@@ -136,8 +149,8 @@ func (s *activityGroupService) Update(req dto.ActivityGroupUpdateRequest) (*enti
 	ent.UpdatedAt = time.Now()
 
 	// begin transaction
-	tx := s.repo.BeginTx()
-	updatedRow, err := s.repo.Update(tx, ent)
+	tx := s.repo.BeginTx(ctx)
+	updatedRow, err := s.repo.Update(ctx, tx, ent)
 
 	// if error rollback, commit otherwise
 	if err != nil {
@@ -151,19 +164,22 @@ func (s *activityGroupService) Update(req dto.ActivityGroupUpdateRequest) (*enti
 }
 
 func (s *activityGroupService) Delete(req dto.ActivityGroupUuidRequest) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
 	// Validate
 	if err := s.validate.Struct(req); err != nil {
 		return err
 	}
 
-	ent, err := s.repo.FindByUuid(req.Uuid)
+	ent, err := s.repo.FindByUuid(ctx, req.Uuid)
 	if err != nil {
 		return err
 	}
 
 	// begin transaction
-	tx := s.repo.BeginTx()
-	err = s.repo.Delete(tx, ent)
+	tx := s.repo.BeginTx(ctx)
+	err = s.repo.Delete(ctx, tx, ent)
 
 	// if error rollback, commit otherwise
 	if err != nil {

@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"math"
 	"time"
 
@@ -36,17 +37,20 @@ func NewTodoItemService(validate *validator.Validate, repo repository.TodoItemRe
 }
 
 func (s *todoItemService) FindByUuid(req dto.TodoItemUuidRequest) (*entity.TodoItem, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
 	// Validate
 	if err := s.validate.Struct(req); err != nil {
 		return nil, err
 	}
 
-	todoItem, err := s.repo.FindByUuid(req.Uuid)
+	todoItem, err := s.repo.FindByUuid(ctx, req.Uuid)
 	if err != nil {
 		return nil, err
 	}
 
-	activity, err := s.repoActivity.FindById(todoItem.ActivityID)
+	activity, err := s.repoActivity.FindById(ctx, todoItem.ActivityID)
 	if err != nil {
 		return nil, err
 	}
@@ -56,6 +60,9 @@ func (s *todoItemService) FindByUuid(req dto.TodoItemUuidRequest) (*entity.TodoI
 }
 
 func (s *todoItemService) FetchAll(req dto.TodoItemFetchRequest) ([]*entity.TodoItem, *responsePkg.Pagination, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
 	var err error
 
 	// Set Default Value
@@ -76,13 +83,13 @@ func (s *todoItemService) FetchAll(req dto.TodoItemFetchRequest) ([]*entity.Todo
 
 	activity := &entity.ActivityGroup{}
 	if req.ActivityUuid != "" {
-		activity, err = s.repoActivity.FindByUuid(req.ActivityUuid)
+		activity, err = s.repoActivity.FindByUuid(ctx, req.ActivityUuid)
 		if err != nil {
 			return nil, nil, err
 		}
 	}
 
-	totalRows, err := s.repo.CountAll(activity.ID, req.Filter)
+	totalRows, err := s.repo.CountAll(ctx, activity.ID, req.Filter)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -92,7 +99,7 @@ func (s *todoItemService) FetchAll(req dto.TodoItemFetchRequest) ([]*entity.Todo
 		return nil, nil, err
 	}
 
-	todoItemList, err := s.repo.FetchAll(req.Page, req.Limit, sorts, activity.ID, req.Filter)
+	todoItemList, err := s.repo.FetchAll(ctx, req.Page, req.Limit, sorts, activity.ID, req.Filter)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -109,6 +116,9 @@ func (s *todoItemService) FetchAll(req dto.TodoItemFetchRequest) ([]*entity.Todo
 }
 
 func (s *todoItemService) Create(req dto.TodoItemCreateRequest) (*entity.TodoItem, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
 	var err error
 
 	// Validate
@@ -118,7 +128,7 @@ func (s *todoItemService) Create(req dto.TodoItemCreateRequest) (*entity.TodoIte
 
 	activity := &entity.ActivityGroup{}
 	if req.ActivityUuid != "" {
-		activity, err = s.repoActivity.FindByUuid(req.ActivityUuid)
+		activity, err = s.repoActivity.FindByUuid(ctx, req.ActivityUuid)
 		if err != nil {
 			return nil, err
 		}
@@ -134,8 +144,8 @@ func (s *todoItemService) Create(req dto.TodoItemCreateRequest) (*entity.TodoIte
 	}
 
 	// begin transaction
-	tx := s.repo.BeginTx()
-	insertedRow, err := s.repo.Store(tx, ent)
+	tx := s.repo.BeginTx(ctx)
+	insertedRow, err := s.repo.Store(ctx, tx, ent)
 
 	// if error rollback, commit otherwise
 	if err != nil {
@@ -149,6 +159,9 @@ func (s *todoItemService) Create(req dto.TodoItemCreateRequest) (*entity.TodoIte
 }
 
 func (s *todoItemService) Update(req dto.TodoItemUpdateRequest) (*entity.TodoItem, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
 	var err error
 
 	// Validate
@@ -156,14 +169,14 @@ func (s *todoItemService) Update(req dto.TodoItemUpdateRequest) (*entity.TodoIte
 		return nil, err
 	}
 
-	ent, err := s.repo.FindByUuid(req.Uuid)
+	ent, err := s.repo.FindByUuid(ctx, req.Uuid)
 	if err != nil {
 		return ent, err
 	}
 
 	activity := &entity.ActivityGroup{}
 	if req.ActivityUuid != "" {
-		activity, err = s.repoActivity.FindByUuid(req.ActivityUuid)
+		activity, err = s.repoActivity.FindByUuid(ctx, req.ActivityUuid)
 		if err != nil {
 			return nil, err
 		}
@@ -176,8 +189,8 @@ func (s *todoItemService) Update(req dto.TodoItemUpdateRequest) (*entity.TodoIte
 	ent.UpdatedAt = time.Now()
 
 	// begin transaction
-	tx := s.repo.BeginTx()
-	updatedRow, err := s.repo.Update(tx, ent)
+	tx := s.repo.BeginTx(ctx)
+	updatedRow, err := s.repo.Update(ctx, tx, ent)
 
 	// if error rollback, commit otherwise
 	if err != nil {
@@ -191,19 +204,22 @@ func (s *todoItemService) Update(req dto.TodoItemUpdateRequest) (*entity.TodoIte
 }
 
 func (s *todoItemService) Delete(req dto.TodoItemUuidRequest) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+
 	// Validate
 	if err := s.validate.Struct(req); err != nil {
 		return err
 	}
 
-	ent, err := s.repo.FindByUuid(req.Uuid)
+	ent, err := s.repo.FindByUuid(ctx, req.Uuid)
 	if err != nil {
 		return err
 	}
 
 	// begin transaction
-	tx := s.repo.BeginTx()
-	err = s.repo.Delete(tx, ent)
+	tx := s.repo.BeginTx(ctx)
+	err = s.repo.Delete(ctx, tx, ent)
 
 	// if error rollback, commit otherwise
 	if err != nil {

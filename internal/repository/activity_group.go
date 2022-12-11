@@ -1,6 +1,8 @@
 package repository
 
 import (
+	"context"
+	"database/sql"
 	"fmt"
 
 	"github.com/Adhiana46/go-restapi-template/internal/entity"
@@ -9,16 +11,16 @@ import (
 )
 
 type ActivityGroupRepository interface {
-	BeginTx() *sqlx.Tx
+	BeginTx(ctx context.Context) *sqlx.Tx
 
-	FindById(id int) (*entity.ActivityGroup, error)
-	FindByUuid(uuid string) (*entity.ActivityGroup, error)
-	FindByUuidTx(tx *sqlx.Tx, uuid string) (*entity.ActivityGroup, error)
-	FetchAll(page int, limit int, sorts map[string]string, filter string) ([]*entity.ActivityGroup, error)
-	CountAll(filter string) (int, error)
-	Store(tx *sqlx.Tx, e *entity.ActivityGroup) (*entity.ActivityGroup, error)
-	Update(tx *sqlx.Tx, e *entity.ActivityGroup) (*entity.ActivityGroup, error)
-	Delete(tx *sqlx.Tx, e *entity.ActivityGroup) error
+	FindById(ctx context.Context, id int) (*entity.ActivityGroup, error)
+	FindByUuid(ctx context.Context, uuid string) (*entity.ActivityGroup, error)
+	FindByUuidTx(ctx context.Context, tx *sqlx.Tx, uuid string) (*entity.ActivityGroup, error)
+	FetchAll(ctx context.Context, page int, limit int, sorts map[string]string, filter string) ([]*entity.ActivityGroup, error)
+	CountAll(ctx context.Context, filter string) (int, error)
+	Store(ctx context.Context, tx *sqlx.Tx, e *entity.ActivityGroup) (*entity.ActivityGroup, error)
+	Update(ctx context.Context, tx *sqlx.Tx, e *entity.ActivityGroup) (*entity.ActivityGroup, error)
+	Delete(ctx context.Context, tx *sqlx.Tx, e *entity.ActivityGroup) error
 }
 
 type activityGroupRepositoryPostgres struct {
@@ -39,11 +41,11 @@ func NewPostgresActivityGroupRepository(db *sqlx.DB) ActivityGroupRepository {
 	}
 }
 
-func (r *activityGroupRepositoryPostgres) BeginTx() *sqlx.Tx {
-	return r.db.MustBegin()
+func (r *activityGroupRepositoryPostgres) BeginTx(ctx context.Context) *sqlx.Tx {
+	return r.db.MustBeginTx(ctx, &sql.TxOptions{})
 }
 
-func (r *activityGroupRepositoryPostgres) FindById(id int) (*entity.ActivityGroup, error) {
+func (r *activityGroupRepositoryPostgres) FindById(ctx context.Context, id int) (*entity.ActivityGroup, error) {
 	psql := sq.StatementBuilder.PlaceholderFormat(sq.Dollar)
 	sql, args, err := psql.Select("*").
 		From(r.TableName()).
@@ -55,7 +57,7 @@ func (r *activityGroupRepositoryPostgres) FindById(id int) (*entity.ActivityGrou
 	}
 
 	row := entity.ActivityGroup{}
-	err = r.db.Get(&row, sql, args...)
+	err = r.db.GetContext(ctx, &row, sql, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -63,7 +65,7 @@ func (r *activityGroupRepositoryPostgres) FindById(id int) (*entity.ActivityGrou
 	return &row, nil
 }
 
-func (r *activityGroupRepositoryPostgres) FindByUuid(uuid string) (*entity.ActivityGroup, error) {
+func (r *activityGroupRepositoryPostgres) FindByUuid(ctx context.Context, uuid string) (*entity.ActivityGroup, error) {
 	psql := sq.StatementBuilder.PlaceholderFormat(sq.Dollar)
 	sql, args, err := psql.Select("*").
 		From(r.TableName()).
@@ -75,7 +77,7 @@ func (r *activityGroupRepositoryPostgres) FindByUuid(uuid string) (*entity.Activ
 	}
 
 	row := entity.ActivityGroup{}
-	err = r.db.Get(&row, sql, args...)
+	err = r.db.GetContext(ctx, &row, sql, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -83,7 +85,7 @@ func (r *activityGroupRepositoryPostgres) FindByUuid(uuid string) (*entity.Activ
 	return &row, nil
 }
 
-func (r *activityGroupRepositoryPostgres) FindByUuidTx(tx *sqlx.Tx, uuid string) (*entity.ActivityGroup, error) {
+func (r *activityGroupRepositoryPostgres) FindByUuidTx(ctx context.Context, tx *sqlx.Tx, uuid string) (*entity.ActivityGroup, error) {
 	psql := sq.StatementBuilder.PlaceholderFormat(sq.Dollar)
 	sql, args, err := psql.Select("*").
 		From(r.TableName()).
@@ -95,7 +97,7 @@ func (r *activityGroupRepositoryPostgres) FindByUuidTx(tx *sqlx.Tx, uuid string)
 	}
 
 	row := entity.ActivityGroup{}
-	err = tx.Get(&row, sql, args...)
+	err = tx.GetContext(ctx, &row, sql, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -103,7 +105,7 @@ func (r *activityGroupRepositoryPostgres) FindByUuidTx(tx *sqlx.Tx, uuid string)
 	return &row, nil
 }
 
-func (r *activityGroupRepositoryPostgres) FetchAll(page int, limit int, sorts map[string]string, filter string) ([]*entity.ActivityGroup, error) {
+func (r *activityGroupRepositoryPostgres) FetchAll(ctx context.Context, page int, limit int, sorts map[string]string, filter string) ([]*entity.ActivityGroup, error) {
 	offset := (page - 1) * limit
 
 	// Build SQL
@@ -130,7 +132,7 @@ func (r *activityGroupRepositoryPostgres) FetchAll(page int, limit int, sorts ma
 	}
 
 	rows := []*entity.ActivityGroup{}
-	err = r.db.Select(&rows, sql, args...)
+	err = r.db.SelectContext(ctx, &rows, sql, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -138,7 +140,7 @@ func (r *activityGroupRepositoryPostgres) FetchAll(page int, limit int, sorts ma
 	return rows, nil
 }
 
-func (r *activityGroupRepositoryPostgres) CountAll(filter string) (int, error) {
+func (r *activityGroupRepositoryPostgres) CountAll(ctx context.Context, filter string) (int, error) {
 	total := 0
 
 	// Build SQL
@@ -155,7 +157,7 @@ func (r *activityGroupRepositoryPostgres) CountAll(filter string) (int, error) {
 		return 0, err
 	}
 
-	rows, err := r.db.Queryx(sql, args...)
+	rows, err := r.db.QueryxContext(ctx, sql, args...)
 	if err != nil {
 		return 0, err
 	}
@@ -169,7 +171,7 @@ func (r *activityGroupRepositoryPostgres) CountAll(filter string) (int, error) {
 	return total, nil
 }
 
-func (r *activityGroupRepositoryPostgres) Store(tx *sqlx.Tx, e *entity.ActivityGroup) (*entity.ActivityGroup, error) {
+func (r *activityGroupRepositoryPostgres) Store(ctx context.Context, tx *sqlx.Tx, e *entity.ActivityGroup) (*entity.ActivityGroup, error) {
 	values := map[string]interface{}{
 		"uuid":        e.Uuid,
 		"name":        e.Name,
@@ -188,15 +190,15 @@ func (r *activityGroupRepositoryPostgres) Store(tx *sqlx.Tx, e *entity.ActivityG
 		return nil, err
 	}
 
-	_, err = tx.Exec(sql, args...)
+	_, err = tx.ExecContext(ctx, sql, args...)
 	if err != nil {
 		return nil, err
 	}
 
-	return r.FindByUuidTx(tx, e.Uuid)
+	return r.FindByUuidTx(ctx, tx, e.Uuid)
 }
 
-func (r *activityGroupRepositoryPostgres) Update(tx *sqlx.Tx, e *entity.ActivityGroup) (*entity.ActivityGroup, error) {
+func (r *activityGroupRepositoryPostgres) Update(ctx context.Context, tx *sqlx.Tx, e *entity.ActivityGroup) (*entity.ActivityGroup, error) {
 	values := map[string]interface{}{
 		"name":        e.Name,
 		"description": e.Description,
@@ -214,7 +216,7 @@ func (r *activityGroupRepositoryPostgres) Update(tx *sqlx.Tx, e *entity.Activity
 		return nil, err
 	}
 
-	_, err = tx.Exec(sql, args...)
+	_, err = tx.ExecContext(ctx, sql, args...)
 	if err != nil {
 		return nil, err
 	}
@@ -222,7 +224,7 @@ func (r *activityGroupRepositoryPostgres) Update(tx *sqlx.Tx, e *entity.Activity
 	return e, nil
 }
 
-func (r *activityGroupRepositoryPostgres) Delete(tx *sqlx.Tx, e *entity.ActivityGroup) error {
+func (r *activityGroupRepositoryPostgres) Delete(ctx context.Context, tx *sqlx.Tx, e *entity.ActivityGroup) error {
 	// Build SQL
 	psql := sq.StatementBuilder.PlaceholderFormat(sq.Dollar)
 	sql, args, err := psql.Delete(r.TableName()).
@@ -233,7 +235,7 @@ func (r *activityGroupRepositoryPostgres) Delete(tx *sqlx.Tx, e *entity.Activity
 		return err
 	}
 
-	_, err = tx.Exec(sql, args...)
+	_, err = tx.ExecContext(ctx, sql, args...)
 	if err != nil {
 		return err
 	}
