@@ -2,9 +2,7 @@ package main
 
 import (
 	"database/sql"
-	"log"
 	"net/http"
-	"runtime/debug"
 	"strings"
 
 	parserPkg "github.com/Adhiana46/go-restapi-template/pkg/parser"
@@ -35,17 +33,11 @@ func handleError(c *fiber.Ctx, err error) error {
 		}
 	}
 
-	// TODO: log errors
-	log.Println("handleError: ", err)
-
 	return c.Status(statusCode).JSON(responsePkg.JsonError(statusCode, message, errorsData))
 }
 
 func handlePanic(c *fiber.Ctx) {
 	if r := recover(); r != nil {
-		// TODO: log
-		log.Println("Recovered in f", r, string(debug.Stack()))
-
 		response := responsePkg.JsonError(http.StatusInternalServerError, "", nil)
 
 		c.Status(http.StatusInternalServerError).JSON(response)

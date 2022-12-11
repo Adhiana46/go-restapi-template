@@ -1,10 +1,11 @@
 package main
 
 import (
-	"log"
+	"time"
 
 	"github.com/Adhiana46/go-restapi-template/handlers"
 	"github.com/gofiber/fiber/v2"
+	"github.com/gofiber/fiber/v2/middleware/logger"
 )
 
 func routes() *fiber.App {
@@ -12,12 +13,19 @@ func routes() *fiber.App {
 		ErrorHandler: handleError,
 	})
 
+	// Logger
+	r.Use(logger.New(logger.Config{
+		TimeFormat: time.RFC3339,
+		Done: func(c *fiber.Ctx, logString []byte) {
+			if c.Response().StatusCode() != fiber.StatusOK {
+				// reporter.SendToSlack(logString)
+			}
+		},
+	}))
+
 	// Handle Panic
 	r.Use(func(c *fiber.Ctx) error {
-		log.Println("Handle Panic Middleware")
-
 		defer handlePanic(c)
-
 		return c.Next()
 	})
 

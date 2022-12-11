@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"log"
 	"os"
 	"time"
 
@@ -15,6 +14,8 @@ import (
 	"github.com/ilyakaznacheev/cleanenv"
 	_ "github.com/jackc/pgx/stdlib"
 	"github.com/jmoiron/sqlx"
+	log "github.com/sirupsen/logrus"
+	easy "github.com/t-tomalak/logrus-easy-formatter"
 )
 
 var (
@@ -59,7 +60,15 @@ func main() {
 }
 
 func boot() {
+	log.SetReportCaller(true)
+	log.SetFormatter(&easy.Formatter{
+		TimestampFormat: time.RFC3339,
+		LogFormat:       "[%lvl%][%time%]: %msg%\n",
+	})
+	log.SetOutput(os.Stdout)
+
 	// Load environment variables
+	log.Infoln("load environment variables")
 	var err error
 	if _, err := os.Stat(".env"); err == nil {
 		err = cleanenv.ReadConfig(".env", &cfg)
@@ -72,12 +81,14 @@ func boot() {
 	}
 
 	// validation & validation trans
+	log.Infoln("setup validation")
 	id := id.New()
 	uni := ut.New(id, id)
 	validateTrans, _ = uni.GetTranslator("id")
 	validate = validator.New()
 	id_translations.RegisterDefaultTranslations(validate, validateTrans)
 
+	log.Infoln("Connecting to database...")
 	db, err = openDB()
 	if err != nil {
 		log.Panicf("Can't open database connection: %s", err)
