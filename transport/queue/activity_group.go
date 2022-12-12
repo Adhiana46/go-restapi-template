@@ -4,18 +4,25 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/Adhiana46/go-restapi-template/internal/dto"
+	"github.com/Adhiana46/go-restapi-template/internal/entity"
+	"github.com/Adhiana46/go-restapi-template/internal/service"
 	amqp "github.com/rabbitmq/amqp091-go"
+	log "github.com/sirupsen/logrus"
 )
 
 type activityGroupWorker struct {
 	conn      *amqp.Connection
 	queueName string
+
+	svcActivityGroup service.ActivityGroupService
 }
 
-func NewActivityGroupWorker(conn *amqp.Connection, queueName string) QueueWorker {
+func NewActivityGroupWorker(conn *amqp.Connection, queueName string, svcActivityGroup service.ActivityGroupService) QueueWorker {
 	return &activityGroupWorker{
-		conn:      conn,
-		queueName: queueName,
+		conn:             conn,
+		queueName:        queueName,
+		svcActivityGroup: svcActivityGroup,
 	}
 }
 
@@ -68,11 +75,10 @@ func (w *activityGroupWorker) Listen() error {
 	var forever chan struct{}
 	go func() {
 		for d := range msgs {
-			var payload queuePayload
+			var payload queueRequestPayload
 			_ = json.Unmarshal(d.Body, &payload)
 
 			go w.handlePayload(d, payload)
-			d.Ack(false)
 		}
 	}()
 
@@ -81,16 +87,171 @@ func (w *activityGroupWorker) Listen() error {
 	return nil
 }
 
-func (w *activityGroupWorker) handlePayload(d amqp.Delivery, payload queuePayload) {
-	// TODO: do something
+func (w *activityGroupWorker) successResponse(action string, data interface{}) error {
+	ch, err := w.conn.Channel()
+	if err != nil {
+		return err
+	}
+	defer ch.Close()
+
+	q, err := ch.QueueDeclare(
+		fmt.Sprintf("%s.%s", w.queueName, action), // name
+		false, // durable
+		false, // delete when unused
+		false, // exclusive
+		false, // no-wait
+		nil,   // arguments
+	)
+
+	dataJson, err := json.Marshal(data)
+	if err != nil {
+		return err
+	}
+
+	err = ch.Publish(
+		"",
+		q.Name,
+		false,
+		false,
+		amqp.Publishing{
+			ContentType: "text/plain",
+			Body:        dataJson,
+		},
+	)
+
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (w *activityGroupWorker) errorResponse(action string, errAct error) error {
+	ch, err := w.conn.Channel()
+	if err != nil {
+		return err
+	}
+	defer ch.Close()
+
+	q, err := ch.QueueDeclare(
+		fmt.Sprintf("%s.error", w.queueName), // name
+		false,                                // durable
+		false,                                // delete when unused
+		false,                                // exclusive
+		false,                                // no-wait
+		nil,                                  // arguments
+	)
+
+	data := map[string]interface{}{
+		"action": action,
+		"error":  errAct.Error(),
+	}
+	dataJson, _ := json.Marshal(data)
+
+	err = ch.Publish(
+		"",
+		q.Name,
+		false,
+		false,
+		amqp.Publishing{
+			ContentType: "text/plain",
+			Body:        dataJson,
+		},
+	)
+
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (w *activityGroupWorker) handlePayload(d amqp.Delivery, payload queueRequestPayload) {
+	dataJson, err := json.Marshal(payload.Data)
+	if err != nil {
+		w.errorResponse(payload.Action, err)
+		d.Ack(false)
+		return
+	}
+
+	log.Infof("[*] Receiving message: %s -> %s", payload.Action, string(dataJson))
+
+	switch payload.Action {
+	case "create":
+		activityGroup, err := w.handleCreate(dataJson)
+		if err != nil {
+			w.errorResponse(payload.Action, err)
+		} else {
+			w.successResponse("created", activityGroup)
+		}
+	case "update":
+		activityGroup, err := w.handleUpdate(dataJson)
+		if err != nil {
+			w.errorResponse(payload.Action, err)
+		} else {
+			w.successResponse("updated", activityGroup)
+		}
+	case "delete":
+		activityGroup, err := w.handleDelete(dataJson)
+		if err != nil {
+			w.errorResponse(payload.Action, err)
+		} else {
+			w.successResponse("deleted", activityGroup)
+		}
+	}
 
 	d.Ack(false)
 }
 
-func (w *activityGroupWorker) successResponse() {
-	//
+func (w *activityGroupWorker) handleCreate(data []byte) (*entity.ActivityGroup, error) {
+	reqDto := dto.ActivityGroupCreateRequest{}
+
+	err := json.Unmarshal(data, &reqDto)
+	if err != nil {
+		return nil, err
+	}
+
+	activityGroup, err := w.svcActivityGroup.Create(reqDto)
+	if err != nil {
+		return nil, err
+	}
+
+	return activityGroup, nil
 }
 
-func (w *activityGroupWorker) errorResponse() {
-	//
+func (w *activityGroupWorker) handleUpdate(data []byte) (*entity.ActivityGroup, error) {
+	reqDto := dto.ActivityGroupUpdateRequest{}
+
+	err := json.Unmarshal(data, &reqDto)
+	if err != nil {
+		return nil, err
+	}
+
+	activityGroup, err := w.svcActivityGroup.Update(reqDto)
+	if err != nil {
+		return nil, err
+	}
+
+	return activityGroup, nil
+}
+
+func (w *activityGroupWorker) handleDelete(data []byte) (*entity.ActivityGroup, error) {
+	reqDto := dto.ActivityGroupUuidRequest{}
+
+	err := json.Unmarshal(data, &reqDto)
+	if err != nil {
+		return nil, err
+	}
+
+	activityGroup, err := w.svcActivityGroup.FindByUuid(reqDto)
+	if err != nil {
+		return nil, err
+	}
+
+	err = w.svcActivityGroup.Delete(reqDto)
+	if err != nil {
+		return nil, err
+	}
+
+	return activityGroup, nil
 }

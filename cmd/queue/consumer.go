@@ -13,7 +13,7 @@ type consumer struct {
 func newConsumer(conn *amqp.Connection) (*consumer, error) {
 	c := &consumer{
 		workers: []queue.QueueWorker{
-			queue.NewActivityGroupWorker(conn, "activity-group"),
+			queue.NewActivityGroupWorker(conn, "activity-group", svcActivityGroup),
 			queue.NewTodoItemWorker(conn, "todo-item"),
 		},
 	}
@@ -21,9 +21,8 @@ func newConsumer(conn *amqp.Connection) (*consumer, error) {
 	return c, nil
 }
 
-func (c *consumer) listen() {
+func (c *consumer) listen() error {
 	var forever chan struct{}
-	// log.Printf("[*] Waiting for messages (%s).", fmt.Sprintf("%s.request", w.queueName))
 
 	log.Infoln("Registering queue workers:")
 	for _, worker := range c.workers {
@@ -33,4 +32,6 @@ func (c *consumer) listen() {
 
 	log.Infof("Waiting for messages. To exit press CTRL+C")
 	<-forever
+
+	return nil
 }

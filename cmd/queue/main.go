@@ -55,7 +55,9 @@ func main() {
 	}
 
 	// watch the queue and consume events
-	consumer.listen()
+	if err := consumer.listen(); err != nil {
+		log.Panicf("Can't start queue worker, error: %s", err)
+	}
 }
 
 func boot() {

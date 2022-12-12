@@ -68,7 +68,7 @@ func (w *todoItemWorker) Listen() error {
 	var forever chan struct{}
 	go func() {
 		for d := range msgs {
-			var payload queuePayload
+			var payload queueRequestPayload
 			_ = json.Unmarshal(d.Body, &payload)
 
 			go w.handlePayload(d, payload)
@@ -81,16 +81,63 @@ func (w *todoItemWorker) Listen() error {
 	return nil
 }
 
-func (w *todoItemWorker) handlePayload(d amqp.Delivery, payload queuePayload) {
+func (w *todoItemWorker) handlePayload(d amqp.Delivery, payload queueRequestPayload) {
 	// TODO: do something
 
 	d.Ack(false)
 }
 
-func (w *todoItemWorker) successResponse() {
-	//
+func (w *todoItemWorker) successResponse(action string, data interface{}) error {
+	ch, err := w.conn.Channel()
+	if err != nil {
+		return err
+	}
+	defer ch.Close()
+
+	dataJson, err := json.Marshal(data)
+	if err != nil {
+		return err
+	}
+
+	err = ch.Publish(
+		"",
+		fmt.Sprintf("%s.success", w.queueName),
+		false,
+		false,
+		amqp.Publishing{
+			ContentType: "text/plain",
+			Body:        dataJson,
+		},
+	)
+
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
-func (w *todoItemWorker) errorResponse() {
-	//
+func (w *todoItemWorker) errorResponse(action string, err error) error {
+	ch, err := w.conn.Channel()
+	if err != nil {
+		return err
+	}
+	defer ch.Close()
+
+	err = ch.Publish(
+		"",
+		fmt.Sprintf("%s.error", w.queueName),
+		false,
+		false,
+		amqp.Publishing{
+			ContentType: "text/plain",
+			Body:        []byte(err.Error()),
+		},
+	)
+
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
