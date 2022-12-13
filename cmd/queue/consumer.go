@@ -14,7 +14,7 @@ func newConsumer(conn *amqp.Connection) (*consumer, error) {
 	c := &consumer{
 		workers: []queue.QueueWorker{
 			queue.NewActivityGroupWorker(conn, "activity-group", svcActivityGroup),
-			queue.NewTodoItemWorker(conn, "todo-item"),
+			queue.NewTodoItemWorker(conn, "todo-item", svcTodoItem),
 		},
 	}
 

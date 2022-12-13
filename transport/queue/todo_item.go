@@ -4,18 +4,26 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/Adhiana46/go-restapi-template/internal/dto"
+	"github.com/Adhiana46/go-restapi-template/internal/entity"
+	"github.com/Adhiana46/go-restapi-template/internal/service"
 	amqp "github.com/rabbitmq/amqp091-go"
+	log "github.com/sirupsen/logrus"
 )
 
 type todoItemWorker struct {
 	conn      *amqp.Connection
 	queueName string
+
+	svcTodoItem service.TodoItemService
 }
 
-func NewTodoItemWorker(conn *amqp.Connection, queueName string) QueueWorker {
+func NewTodoItemWorker(conn *amqp.Connection, queueName string, svcTodoItem service.TodoItemService) QueueWorker {
 	return &todoItemWorker{
 		conn:      conn,
 		queueName: queueName,
+
+		svcTodoItem: svcTodoItem,
 	}
 }
 
@@ -72,7 +80,6 @@ func (w *todoItemWorker) Listen() error {
 			_ = json.Unmarshal(d.Body, &payload)
 
 			go w.handlePayload(d, payload)
-			d.Ack(false)
 		}
 	}()
 
@@ -82,62 +89,91 @@ func (w *todoItemWorker) Listen() error {
 }
 
 func (w *todoItemWorker) handlePayload(d amqp.Delivery, payload queueRequestPayload) {
-	// TODO: do something
+	dataJson, err := json.Marshal(payload.Data)
+	if err != nil {
+		errorResponse(w.conn, w.queueName, payload.Action, err)
+		d.Ack(false)
+		return
+	}
+
+	log.Infof("[%s] Receiving message: %s -> %s", w.queueName, payload.Action, string(dataJson))
+
+	switch payload.Action {
+	case "create":
+		todoItem, err := w.handleCreate(dataJson)
+		if err != nil {
+			errorResponse(w.conn, w.queueName, payload.Action, err)
+		} else {
+			successResponse(w.conn, w.queueName, "created", todoItem)
+		}
+	case "update":
+		todoItem, err := w.handleUpdate(dataJson)
+		if err != nil {
+			errorResponse(w.conn, w.queueName, payload.Action, err)
+		} else {
+			successResponse(w.conn, w.queueName, "updated", todoItem)
+		}
+	case "delete":
+		todoItem, err := w.handleDelete(dataJson)
+		if err != nil {
+			errorResponse(w.conn, w.queueName, payload.Action, err)
+		} else {
+			successResponse(w.conn, w.queueName, "deleted", todoItem)
+		}
+	}
 
 	d.Ack(false)
 }
 
-func (w *todoItemWorker) successResponse(action string, data interface{}) error {
-	ch, err := w.conn.Channel()
-	if err != nil {
-		return err
-	}
-	defer ch.Close()
+func (w *todoItemWorker) handleCreate(data []byte) (*entity.TodoItem, error) {
+	reqDto := dto.TodoItemCreateRequest{}
 
-	dataJson, err := json.Marshal(data)
+	err := json.Unmarshal(data, &reqDto)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	err = ch.Publish(
-		"",
-		fmt.Sprintf("%s.success", w.queueName),
-		false,
-		false,
-		amqp.Publishing{
-			ContentType: "text/plain",
-			Body:        dataJson,
-		},
-	)
-
+	todoItem, err := w.svcTodoItem.Create(reqDto)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	return nil
+	return todoItem, nil
 }
 
-func (w *todoItemWorker) errorResponse(action string, err error) error {
-	ch, err := w.conn.Channel()
-	if err != nil {
-		return err
-	}
-	defer ch.Close()
+func (w *todoItemWorker) handleUpdate(data []byte) (*entity.TodoItem, error) {
+	reqDto := dto.TodoItemUpdateRequest{}
 
-	err = ch.Publish(
-		"",
-		fmt.Sprintf("%s.error", w.queueName),
-		false,
-		false,
-		amqp.Publishing{
-			ContentType: "text/plain",
-			Body:        []byte(err.Error()),
-		},
-	)
-
+	err := json.Unmarshal(data, &reqDto)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	return nil
+	todoItem, err := w.svcTodoItem.Update(reqDto)
+	if err != nil {
+		return nil, err
+	}
+
+	return todoItem, nil
+}
+
+func (w *todoItemWorker) handleDelete(data []byte) (*entity.TodoItem, error) {
+	reqDto := dto.TodoItemUuidRequest{}
+
+	err := json.Unmarshal(data, &reqDto)
+	if err != nil {
+		return nil, err
+	}
+
+	todoItem, err := w.svcTodoItem.FindByUuid(reqDto)
+	if err != nil {
+		return nil, err
+	}
+
+	err = w.svcTodoItem.Delete(reqDto)
+	if err != nil {
+		return nil, err
+	}
+
+	return todoItem, nil
 }
