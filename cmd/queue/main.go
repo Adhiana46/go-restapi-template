@@ -1,13 +1,13 @@
 package main
 
 import (
-	"fmt"
 	"os"
 	"time"
 
 	"github.com/Adhiana46/go-restapi-template/config"
 	"github.com/Adhiana46/go-restapi-template/internal/repository"
 	"github.com/Adhiana46/go-restapi-template/internal/service"
+	"github.com/Adhiana46/go-restapi-template/pkg/rabbitmq"
 	"github.com/Adhiana46/go-restapi-template/pkg/sqldb"
 	"github.com/go-playground/locales/id"
 	ut "github.com/go-playground/universal-translator"
@@ -16,12 +16,14 @@ import (
 	"github.com/ilyakaznacheev/cleanenv"
 	_ "github.com/jackc/pgx/stdlib"
 	"github.com/jmoiron/sqlx"
+	amqp "github.com/rabbitmq/amqp091-go"
 	log "github.com/sirupsen/logrus"
 	easy "github.com/t-tomalak/logrus-easy-formatter"
 )
 
 var (
-	db *sqlx.DB
+	rabbitConn *amqp.Connection
+	db         *sqlx.DB
 
 	// utils
 	validate      *validator.Validate
@@ -41,11 +43,20 @@ var cfg *config.Config
 func main() {
 	boot()
 	defer db.Close()
+	defer rabbitConn.Close()
 
-	r := httpRoutes()
+	// start listening for message
+	log.Println("Listening for and consuming RabbitMQ messages....")
 
-	if err := r.Listen(fmt.Sprintf("%s:%s", cfg.Host, cfg.Port)); err != nil {
-		log.Panicf("Can't start the server, error: %s", err)
+	// create consumer
+	consumer, err := newConsumer(rabbitConn)
+	if err != nil {
+		log.Panicf("Can't consume event: %s", err)
+	}
+
+	// watch the queue and consume events
+	if err := consumer.listen(); err != nil {
+		log.Panicf("Can't start queue worker, error: %s", err)
 	}
 }
 
@@ -83,6 +94,12 @@ func boot() {
 	db, err = sqldb.OpenConn(cfg)
 	if err != nil {
 		log.Panicf("Can't open database connection: %s", err)
+	}
+
+	log.Infoln("Connecting to RabbitMQ...")
+	rabbitConn, err = rabbitmq.OpenConn(cfg)
+	if err != nil {
+		log.Panicf("Can't open connection to RabbitMQ: %s", err)
 	}
 
 	// repositories
