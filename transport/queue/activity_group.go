@@ -87,116 +87,37 @@ func (w *activityGroupWorker) Listen() error {
 	return nil
 }
 
-func (w *activityGroupWorker) successResponse(action string, data interface{}) error {
-	ch, err := w.conn.Channel()
-	if err != nil {
-		return err
-	}
-	defer ch.Close()
-
-	q, err := ch.QueueDeclare(
-		fmt.Sprintf("%s.%s", w.queueName, action), // name
-		false, // durable
-		false, // delete when unused
-		false, // exclusive
-		false, // no-wait
-		nil,   // arguments
-	)
-
-	dataJson, err := json.Marshal(data)
-	if err != nil {
-		return err
-	}
-
-	err = ch.Publish(
-		"",
-		q.Name,
-		false,
-		false,
-		amqp.Publishing{
-			ContentType: "text/plain",
-			Body:        dataJson,
-		},
-	)
-
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (w *activityGroupWorker) errorResponse(action string, errAct error) error {
-	ch, err := w.conn.Channel()
-	if err != nil {
-		return err
-	}
-	defer ch.Close()
-
-	q, err := ch.QueueDeclare(
-		fmt.Sprintf("%s.error", w.queueName), // name
-		false,                                // durable
-		false,                                // delete when unused
-		false,                                // exclusive
-		false,                                // no-wait
-		nil,                                  // arguments
-	)
-
-	data := map[string]interface{}{
-		"action": action,
-		"error":  errAct.Error(),
-	}
-	dataJson, _ := json.Marshal(data)
-
-	err = ch.Publish(
-		"",
-		q.Name,
-		false,
-		false,
-		amqp.Publishing{
-			ContentType: "text/plain",
-			Body:        dataJson,
-		},
-	)
-
-	if err != nil {
-		return err
-	}
-
-	return nil
-}
-
 func (w *activityGroupWorker) handlePayload(d amqp.Delivery, payload queueRequestPayload) {
 	dataJson, err := json.Marshal(payload.Data)
 	if err != nil {
-		w.errorResponse(payload.Action, err)
+		errorResponse(w.conn, w.queueName, payload.Action, err)
 		d.Ack(false)
 		return
 	}
 
-	log.Infof("[*] Receiving message: %s -> %s", payload.Action, string(dataJson))
+	log.Infof("[%s] Receiving message: %s -> %s", w.queueName, payload.Action, string(dataJson))
 
 	switch payload.Action {
 	case "create":
 		activityGroup, err := w.handleCreate(dataJson)
 		if err != nil {
-			w.errorResponse(payload.Action, err)
+			errorResponse(w.conn, w.queueName, payload.Action, err)
 		} else {
-			w.successResponse("created", activityGroup)
+			successResponse(w.conn, w.queueName, "created", activityGroup)
 		}
 	case "update":
 		activityGroup, err := w.handleUpdate(dataJson)
 		if err != nil {
-			w.errorResponse(payload.Action, err)
+			errorResponse(w.conn, w.queueName, payload.Action, err)
 		} else {
-			w.successResponse("updated", activityGroup)
+			successResponse(w.conn, w.queueName, "updated", activityGroup)
 		}
 	case "delete":
 		activityGroup, err := w.handleDelete(dataJson)
 		if err != nil {
-			w.errorResponse(payload.Action, err)
+			errorResponse(w.conn, w.queueName, payload.Action, err)
 		} else {
-			w.successResponse("deleted", activityGroup)
+			successResponse(w.conn, w.queueName, "deleted", activityGroup)
 		}
 	}
 
